@@ -1,0 +1,38 @@
+<!--
+  PHP2Shell (CVE-2026-109618 / CVE-2026-109619) memory-exhaustion signal on
+  Apache mod_php, for Wazuh. Tested on Wazuh 4.14.7 against PHP 8.5.11.
+
+  SIGNAL
+  Apache writes the PHP bailout to error.log wrapped in its own prefix:
+
+    [php:error] PHP Fatal error: Allowed memory size ... exhausted
+
+  That line is decoded by stock rule 30301 at level 0, so nothing alerts on it
+  by default. This rule is a child of 30301 that raises the level.
+
+  WHAT STOCK WAZUH 4.14.7 DID NOT CATCH, AND WHY
+  31122 is web 500, and the observed response was HTTP 200, so a rule keyed on
+  the status code misses this entirely. 31420 expects a bare "PHP Fatal error"
+  line and does not fire on the Apache-wrapped form. 30301 and 31108 both
+  decoded the events, at level 0. Collection was never the problem; the level
+  was.
+
+  TUNING
+  Change the id if 102005 is taken in your ruleset. The match is deliberately
+  the broad "PHP Fatal error", which is what was validated. If your
+  applications log fatals routinely, narrow it to "Allowed memory size" to key
+  on the exhaustion specifically, at the cost of missing other fatal classes
+  this vulnerability can produce.
+-->
+<group name="web,apache,php,">
+
+  <rule id="102005" level="10">
+    <if_sid>30301</if_sid>
+    <match>PHP Fatal error</match>
+    <description>Apache PHP Fatal error, possible PHP2Shell memory exhaustion</description>
+    <mitre>
+      <id>T1499.004</id>
+    </mitre>
+  </rule>
+
+</group>

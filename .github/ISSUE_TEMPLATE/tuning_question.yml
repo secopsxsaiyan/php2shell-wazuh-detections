@@ -1,0 +1,19 @@
+name: Deployment or tuning question
+description: The rules are not firing, or you need to scope them to some hosts
+title: "[Q] "
+labels: ["question"]
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks already done
+      options:
+        - label: "`wazuh-analysisd -t` passes and the manager was restarted, not reloaded"
+        - label: auditd on the host records execve and the events reach the manager
+        - label: The rule ids do not collide with another ruleset on this manager
+  - type: textarea
+    id: question
+    attributes:
+      label: What you are seeing
+    validations:
+      required: true

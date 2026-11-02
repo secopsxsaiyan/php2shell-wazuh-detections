@@ -1,0 +1,119 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    name: Wazuh rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Well-formed XML
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxml2-utils
+          for f in rules/*.xml; do xmllint --noout "$f"; echo "ok $f"; done
+
+      # Structural checks a reviewer should not have to do by eye: unique ids,
+      # a level and description on every rule, patterns that compile, and no
+      # rule whose only condition is its parent, which would raise the level on
+      # everything that parent decodes.
+      - name: Rule structure
+        run: |
+          python3 - <<'PY'
+          import glob, re, sys
+          import xml.etree.ElementTree as ET
+          seen, problems = {}, []
+          for path in sorted(glob.glob("rules/*.xml")):
+              root = ET.parse(path).getroot()
+              if root.tag != "group":
+                  problems.append(f"{path}: root is <{root.tag}>, expected <group>")
+              for rule in root.iter("rule"):
+                  rid = rule.get("id")
+                  if rid in seen:
+                      problems.append(f"{path}: duplicate rule id {rid}")
+                  seen[rid] = path
+                  level = int(rule.get("level", -1))
+                  if not 0 <= level <= 16:
+                      problems.append(f"{rid}: level {level} out of range")
+                  if not (rule.findtext("description") or "").strip():
+                      problems.append(f"{rid}: empty description")
+                  tags = [e.tag for e in rule]
+                  if not any(t in ("field", "match", "regex", "pcre2", "id", "status", "url", "program_name") for t in tags):
+                      problems.append(f"{rid}: no condition beyond <if_sid>")
+                  for field in rule.findall("field"):
+                      try:
+                          re.compile(field.text or "")
+                      except re.error as exc:
+                          problems.append(f"{rid}: field {field.get('name')} does not compile: {exc}")
+          print("\n".join(problems) or f"ok, {len(seen)} rules: {' '.join(sorted(seen))}")
+          sys.exit(1 if problems else 0)
+          PY
+
+  sigma:
+    name: Sigma rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install sigma-cli
+        run: pip install --quiet sigma-cli
+
+      # The authority on Sigma validity. Fails the build on any rule error,
+      # condition error or validator issue.
+      - name: sigma check
+        run: |
+          sigma check sigma/*.yaml | tee check.log
+          grep -q "Found 0 errors, 0 condition errors and 0 issues" check.log
+
+      - name: Convert to a backend as a smoke test
+        run: |
+          pip install --quiet pysigma-backend-splunk
+          sigma convert -t splunk --without-pipeline sigma/php2shell.yaml
+
+  hygiene:
+    name: Pack hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # This pack is deployed by people in their own environments. Internal
+      # scoping, an operator instruction or an active-response block would
+      # either break the rule for them or tell them not to enable it.
+      - name: No internal scoping or active response
+        run: |
+          if grep -rniE 'lab-poc|lab_poc|lab-test|active-response|do not enable' \
+               README.md CONTRIBUTING.md CHANGELOG.md rules/ sigma/; then
+            echo "::error::found internal scoping or operator language"
+            exit 1
+          fi
+          echo "clean"
+
+      - name: ASCII punctuation only
+        run: |
+          if grep -rlP '[^\x00-\x7F]' README.md CONTRIBUTING.md CHANGELOG.md rules/ sigma/; then
+            echo "::error::non-ASCII character found in the files listed above"
+            exit 1
+          fi
+          echo "clean"
+
+      - name: Rule ids in the README match the rule files
+        run: |
+          ids=$(grep -ohE '<rule id="[0-9]+"' rules/*.xml | grep -oE '[0-9]+' | sort -u)
+          for id in $ids; do
+            grep -q "$id" README.md || { echo "::error::rule $id is not documented in README.md"; exit 1; }
+          done
+          echo "documented: $(echo $ids | tr '\n' ' ')"

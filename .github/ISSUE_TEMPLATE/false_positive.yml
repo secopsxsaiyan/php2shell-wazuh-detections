@@ -1,0 +1,46 @@
+name: False positive
+description: A rule fired on something legitimate in your environment
+title: "[FP] rule <id>: "
+labels: ["false positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful report this project can receive. The rules were
+        validated on one configuration, so your estate is new information.
+        Please remove hostnames, internal addresses and usernames first.
+  - type: input
+    id: rule
+    attributes:
+      label: Rule id
+      placeholder: "102007"
+    validations:
+      required: true
+  - type: textarea
+    id: alert
+    attributes:
+      label: The alert, sanitized
+      description: The alert JSON or the matching log line, with your identifiers removed.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: legitimate
+    attributes:
+      label: What the activity actually was
+      description: The process, the account, and why it is expected on that host.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Wazuh version and OS
+      placeholder: "Wazuh 4.14.7, Debian 13, Apache mod_php 8.3"
+    validations:
+      required: true
+  - type: textarea
+    id: frequency
+    attributes:
+      label: How often
+      description: A count over a period is more useful than "often".
+      placeholder: "14 alerts in 24 hours across 3 hosts"

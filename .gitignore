@@ -1,0 +1,13 @@
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.swo
+*.tmp
+.directory
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+__pycache__/
+*.pyc

@@ -1,0 +1,32 @@
+name: Missed detection
+description: Exploitation or a variant that these rules did not catch
+title: "[FN] "
+labels: ["false negative"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include exploit code, payloads or a request builder. Describe the
+        observable the rules should have keyed on. Issues containing working
+        exploit code will be closed.
+  - type: textarea
+    id: observable
+    attributes:
+      label: What the host did that was not alerted on
+      description: Process, account, file, or log line. The action, not the payload.
+    validations:
+      required: true
+  - type: textarea
+    id: telemetry
+    attributes:
+      label: Available telemetry
+      description: What your agents collect on that host, for example auditd execve, FIM, or web logs.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: PHP and web server version
+      placeholder: "PHP 8.4.26, php-fpm"
+    validations:
+      required: true

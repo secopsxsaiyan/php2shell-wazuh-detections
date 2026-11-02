@@ -1,0 +1,44 @@
+<!--
+  PHP2Shell (CVE-2026-109618 / CVE-2026-109619) execution detection for Wazuh.
+  Tested on Wazuh 4.14.7 against PHP 8.5.11 with Apache mod_php.
+
+  SIGNAL
+  A shell execve by a non-root account. The vulnerable worker runs as the web
+  service account (uid 33, www-data, on Debian), so an attacker-induced shell
+  is non-root. Root shells are the machine's own housekeeping.
+
+  WHY THE uid CONDITION IS LOAD-BEARING
+  Without it this rule is unusable. On an idle test host with no attack
+  running, the version without the uid field fired 40 times in a few minutes:
+  every one uid 0, exe /usr/bin/dash, a0 "sh" or "/bin/sh", mostly a single
+  ppid. Cron, systemd and the Wazuh agent's own wodles run "sh -c" constantly.
+  At level 12 that buries the one event worth catching.
+
+  The negative lookahead is used rather than matching uid 33, so the rule keeps
+  working where the vulnerable service runs as another non-root account.
+
+  REQUIRES
+  auditd on the monitored host with execve recorded and shipped to the manager.
+  An execve-only audit policy is enough. The rule reads audit.execve.a0 and
+  audit.uid, and 80700 is the stock auditd parent.
+
+  TUNING
+  Change the id if 102007 is taken in your ruleset. On a host where a non-root
+  interactive shell is normal, restrict the rule to your single-purpose web
+  hosts with a <location> or a group condition. Note that an agent event's
+  location is "(agent-name) any->/path", parentheses included, so a pattern
+  written against a bare agent name will never match.
+-->
+<group name="audit,audit_command,">
+
+  <rule id="102007" level="12">
+    <if_sid>80700</if_sid>
+    <field name="audit.execve.a0" type="pcre2">^((/usr)?/bin/)?(sh|bash|dash)$</field>
+    <field name="audit.uid" type="pcre2">^(?!0$)[0-9]+$</field>
+    <description>Web service account spawned a shell (PHP2Shell execution)</description>
+    <mitre>
+      <id>T1059.004</id>
+    </mitre>
+  </rule>
+
+</group>

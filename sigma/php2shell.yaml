@@ -1,0 +1,82 @@
+title: Web service account spawned a shell
+id: 974113a0-cfff-4bb5-8f60-6bf2571275b1
+status: experimental
+description: >
+  A shell execve by a non-root account on a host running PHP. This is the
+  observable end of PHP2Shell exploitation (session injection then local file
+  include), where the vulnerable worker executes an attacker-chosen command as
+  the web service account. The non-root condition is load-bearing: without it
+  an idle host produced 40 matches in a few minutes, all of them uid 0 service
+  housekeeping. Original wording, not derived from any upstream pack.
+references:
+  - https://github.com/ikow/php2shell-poc
+  - CVE-2026-109618
+  - CVE-2026-109619
+author: secopsxsaiyan
+date: 2026-11-01
+logsource:
+  product: linux
+  service: auditd
+detection:
+  execve_shell:
+    type: EXECVE
+    a0|endswith:
+      - '/sh'
+      - '/bash'
+      - '/dash'
+  execve_shell_bare:
+    type: EXECVE
+    a0:
+      - 'sh'
+      - 'bash'
+      - 'dash'
+  root:
+    uid: 0
+  condition: (execve_shell or execve_shell_bare) and not root
+fields:
+  - uid
+  - exe
+  - ppid
+  - a0
+falsepositives:
+  - Any legitimate non-root shell. On a general-purpose server this is common
+    and the rule will be noisy. It is written for a single-purpose host where
+    the web account should never spawn a shell.
+  - Deployment tooling or CI agents running as a service account.
+level: high
+tags:
+  - attack.execution
+  - attack.t1059.004
+  - cve.2026-109618
+  - cve.2026-109619
+---
+title: PHP memory exhaustion or allocator corruption in web server error log
+id: 9adc537f-5a5d-40ad-be1b-e7fccf840bf8
+status: experimental
+description: >
+  A PHP memory bailout or zend allocator corruption recorded in the web
+  server error log. This is the defender-visible signal when PHP2Shell is
+  driven to exhaust memory rather than to execute. In the tested case the HTTP
+  response was 200, so the error log was the only place the event appeared.
+references:
+  - CVE-2026-109618
+  - CVE-2026-109619
+author: secopsxsaiyan
+date: 2026-11-01
+logsource:
+  product: apache
+  service: error
+detection:
+  selection:
+    - 'Allowed memory size of'
+    - 'zend_mm_heap corrupted'
+    - 'PHP Fatal error'
+  condition: selection
+falsepositives:
+  - Legitimate large-upload OOM when memory_limit is low.
+  - Applications that log PHP fatals as a matter of course.
+level: high
+tags:
+  - attack.impact
+  - cve.2026-109618
+  - cve.2026-109619
